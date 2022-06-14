@@ -2,10 +2,18 @@ local M = {}
 
 local uv = vim.loop
 
+local rootPath = "/home/john/.config/nvim/unnamed/" -- TODO: make this configurable
+local repoPath = rootPath .. "repo/"
+local compilePath = rootPath .. "compiled/"
+
+local function pack(...)
+    return {n = select("#", ...), ...}
+end
+
 local function async(fn)
-    return function()
+    return function(...)
         local thread = coroutine.create(fn)
-        local status, ret = coroutine.resume(thread)
+        local status, ret = coroutine.resume(thread, ...)
         assert(status, ret)
     end
 end
@@ -17,22 +25,40 @@ local function asyncify(fn)
         assert(status, ret)
     end
 
-    fn(callback)
+    return fn(callback)
 end
 
-local function await()
-    return coroutine.yield()
+local function await(...)
+    local ret = { ... }
+    local coroutine_ret = pack(coroutine.yield())
+
+    -- join coroutine_ret into ret
+    for i, v in ipairs(coroutine_ret) do
+        table.insert(ret, v)
+    end
+
+    return unpack(ret)
 end
 
 local function spawn(name, opts)
     return asyncify(function(callback)
-        uv.spawn(name, opts, callback)
+        local handle, pid = uv.spawn(name, opts, callback)
+        assert(handle, pid) -- fails here when executable is not found (ENOENT), for example
+        return handle, pid
     end)
 end
 
-M.setup = async(function()
-    local code, signal = await(spawn("touch", { args = { "/home/john/foo" } }))
-    print("yes!", code, signal)
+M.setup = async(function(repos)
+    for i, repo in ipairs(repos) do
+        print(string.format("cloning %s ", repo))
+
+        local _, _, code = await(spawn("git", { args = { "clone", "https://github.com/" .. repo, repoPath .. repo } }))
+        if code ~= 0 then
+            error(string.format("git exited with code %d", code))
+        end
+
+        print(string.format("cloning %s done", repo))
+    end
 end)
 
 return M
