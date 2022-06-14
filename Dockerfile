@@ -1,9 +1,12 @@
 from archlinux/archlinux
 
-run pacman -Syu --noconfirm --needed base neovim sudo && \
+run pacman -Sy --noconfirm archlinux-keyring && \
+    pacman-key --init && \
+    pacman-key --populate && \
+    pacman -Su --noconfirm --needed base neovim sudo git && \
     rm -rf /var/cache/pacman
 run useradd -m -G wheel john
-run echo 'root ALL=(ALL) ALL\n%wheel ALL=(ALL) ALL' > /etc/sudoers
+run echo -e 'root ALL=(ALL) NOPASSWD: ALL\n%wheel ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers
 
 user john
 workdir /home/john/.config/nvim
