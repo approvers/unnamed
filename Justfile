@@ -11,3 +11,8 @@ dev:
 # attach to container which is already started.
 attach:
 	docker exec -it unnamed-dev bash
+
+# format lua files using stylua
+# install by `cargo install stylua` if you have not installed
+fmt:
+	stylua .
