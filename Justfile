@@ -9,5 +9,5 @@ dev:
 		unnamed-dev bash
 
 # attach to container which is already started.
-shell:
+attach:
 	docker exec -it unnamed-dev bash
