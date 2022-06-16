@@ -9,7 +9,7 @@ local compilePath = rootPath .. "compiled/"
 local compile_blacklist = { ".git" }
 
 local function pack(...)
-    return {n = select("#", ...), ...}
+    return { n = select("#", ...), ... }
 end
 
 local function str_starts_with(str, starting)
@@ -57,7 +57,11 @@ local function append_path(elements, opts)
 end
 
 local function coroutine_fail_fmt(ret, thread)
-    return string.format("\n\n### coroutine stacktrace ###\n%s\n%s\n### coroutine stacktrace until here ###\n", ret, debug.traceback(thread))
+    return string.format(
+        "\n\n### coroutine stacktrace ###\n%s\n%s\n### coroutine stacktrace until here ###\n",
+        ret,
+        debug.traceback(thread)
+    )
 end
 
 local function async(fn)
@@ -134,7 +138,7 @@ end
 local function compile(repos)
     local symlink_table = {}
     for _, repo in ipairs(repos) do
-        local fullpath = append_path({repoPath, repo})
+        local fullpath = append_path({ repoPath, repo })
         local repo_files = list_files_recursively(fullpath)
 
         for _, file in ipairs(repo_files) do
@@ -150,7 +154,7 @@ end
 
 M.setup = async(function(repos)
     for i, repo in ipairs(repos) do
-        local clonePath = append_path({repoPath, repo})
+        local clonePath = append_path({ repoPath, repo })
         local stat = uv.fs_stat(clonePath) -- TODO: proper detectation (check whether if `git status` successes?)
 
         if stat == nil then
