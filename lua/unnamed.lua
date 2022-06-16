@@ -50,14 +50,19 @@ end
 
 M.setup = async(function(repos)
     for i, repo in ipairs(repos) do
-        print(string.format("cloning %s ", repo))
+        local clonePath = repoPath .. repo
+        local stat = uv.fs_stat(clonePath) -- TODO: proper detectation (check whether if `git status` successes?)
 
-        local _, _, code = await(spawn("git", { args = { "clone", "https://github.com/" .. repo, repoPath .. repo } }))
-        if code ~= 0 then
-            error(string.format("git exited with code %d", code))
+        if stat == nil then
+            print(string.format("cloning %s ", repo))
+
+            local _, _, code = await(spawn("git", { args = { "clone", "https://github.com/" .. repo, clonePath } }))
+            if code ~= 0 then
+                error(string.format("git exited with code %d", code))
+            end
+
+            print(string.format("cloning %s done", repo))
         end
-
-        print(string.format("cloning %s done", repo))
     end
 end)
 
