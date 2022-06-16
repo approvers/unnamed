@@ -10,11 +10,16 @@ local function pack(...)
     return {n = select("#", ...), ...}
 end
 
+
+local function coroutine_fail_fmt(ret, thread)
+    return string.format("\n\n### coroutine stacktrace ###\n%s\n%s\n### coroutine stacktrace until here ###\n", ret, debug.traceback(thread))
+end
+
 local function async(fn)
     return function(...)
         local thread = coroutine.create(fn)
         local status, ret = coroutine.resume(thread, ...)
-        assert(status, ret)
+        assert(status, coroutine_fail_fmt(ret, thread))
     end
 end
 
@@ -22,7 +27,7 @@ local function asyncify(fn)
     local current_co = coroutine.running()
     local callback = function(...)
         local status, ret = coroutine.resume(current_co, ...)
-        assert(status, ret)
+        assert(status, coroutine_fail_fmt(ret, current_co))
     end
 
     return fn(callback)
