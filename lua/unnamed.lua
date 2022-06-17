@@ -61,7 +61,7 @@ local function str_trim_prefix(str, prefix)
 end
 
 -- { trailing_slash: bool (default = true) }
-local function append_path(elements, opts)
+local function join_path(elements, opts)
     local ret = ""
 
     for _, element in ipairs(elements) do
@@ -172,9 +172,9 @@ local function list_files_recursively(path)
 
         if not array_contains(name, compile_blacklist) then
             if type == "file" then
-                table.insert(ret, append_path({ path, name }, { trailing_slash = false }))
+                table.insert(ret, join_path({ path, name }, { trailing_slash = false }))
             elseif type == "directory" then
-                for _, file in ipairs(list_files_recursively(append_path({ path, name }))) do
+                for _, file in ipairs(list_files_recursively(join_path({ path, name }))) do
                     table.insert(ret, file)
                 end
             end
@@ -187,7 +187,7 @@ end
 local function compile(repos)
     local symlink_table = {}
     for _, repo in ipairs(repos) do
-        local fullpath = append_path({ repoPath, repo })
+        local fullpath = join_path({ repoPath, repo })
         local repo_files = list_files_recursively(fullpath)
 
         for _, file in ipairs(repo_files) do
@@ -197,7 +197,7 @@ local function compile(repos)
     end
 
     for compiledFilePath, srcPath in pairs(symlink_table) do
-        local compiledFullPath = append_path({ compilePath, compiledFilePath }, { trailing_slash = false })
+        local compiledFullPath = join_path({ compilePath, compiledFilePath }, { trailing_slash = false })
 
         local iserr, err = await(
             spawn("sh", { args = { "-c", string.format("mkdir -p $(dirname '%s')", compiledFullPath) } })
@@ -211,7 +211,7 @@ end
 
 M.setup = async(function(repos)
     for i, repo in ipairs(repos) do
-        local clonePath = append_path({ repoPath, repo })
+        local clonePath = join_path({ repoPath, repo })
         local stat = uv.fs_stat(clonePath) -- TODO: proper detectation (check whether if `git status` successes?)
 
         if stat == nil then
