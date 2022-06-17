@@ -196,8 +196,16 @@ local function compile(repos)
         end
     end
 
-    for k, v in pairs(symlink_table) do
-        print(string.format("%s -> %s", k, v))
+    for compiledFilePath, srcPath in pairs(symlink_table) do
+        local compiledFullPath = append_path({ compilePath, compiledFilePath }, { trailing_slash = false })
+
+        local iserr, err = await(
+            spawn("sh", { args = { "-c", string.format("mkdir -p $(dirname '%s')", compiledFullPath) } })
+        )
+        assert(iserr, err)
+
+        local iserr, err = uv.fs_symlink(compiledFullPath, srcPath)
+        assert(iserr, err)
     end
 end
 
