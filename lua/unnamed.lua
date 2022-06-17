@@ -1,5 +1,6 @@
 local M = {}
 
+-- https://github.com/luvit/luv/blob/master/docs.md
 local uv = vim.loop
 
 local rootPath = "/home/john/.config/nvim/unnamed/" -- TODO: make this configurable
@@ -28,6 +29,27 @@ local function array_contains(value, array)
     end
 
     return false
+end
+
+local function join_array(arrays)
+    local ret = {}
+    for _, array in ipairs(arrays) do
+        for _, v in ipairs(array) do
+            table.insert(ret, v)
+        end
+    end
+    return ret
+end
+
+local function join_str(strarray, delimiter)
+    local ret = ""
+    for i, s in ipairs(strarray) do
+        ret = ret .. s
+        if i ~= #strarray then
+            ret = ret .. (delimiter or " ")
+        end
+    end
+    return ret
 end
 
 local function str_trim_prefix(str, prefix)
@@ -72,10 +94,15 @@ local function async(fn)
     end
 end
 
+-- resume_ctx: dict {
+--     ret: array,
+--     deferred: Option<fn>
+-- }
+
 local function asyncify(fn)
     local current_co = coroutine.running()
-    local callback = function(...)
-        local status, ret = coroutine.resume(current_co, ...)
+    local callback = function(resume_ctx)
+        local status, ret = coroutine.resume(current_co, resume_ctx)
         assert(status, coroutine_fail_fmt(ret, current_co))
     end
 
@@ -84,18 +111,40 @@ end
 
 local function await(...)
     local ret = { ... }
-    local coroutine_ret = pack(coroutine.yield())
+    local resume_ctx = coroutine.yield()
 
-    -- join coroutine_ret into ret
-    for i, v in ipairs(coroutine_ret) do
-        table.insert(ret, v)
+    if resume_ctx.deferred then
+        resume_ctx.deferred()
     end
 
-    return unpack(ret)
+    return unpack(join_array({ ret, resume_ctx.ret or {} }))
 end
 
 local function spawn(name, opts)
-    return asyncify(function(callback)
+    assert(name and opts)
+
+    return asyncify(function(wake)
+        local callback = function(code, signal)
+            local deferred = function()
+                if code == 0 then
+                    return
+                end
+
+                local msg = string.format(
+                    "command '%s' failed with status %d",
+                    join_str(join_array({ { name }, opts.args or {} })),
+                    code
+                )
+
+                error(msg)
+            end
+
+            wake({
+                ret = { code, signal },
+                deferred = deferred,
+            })
+        end
+
         local handle, pid = uv.spawn(name, opts, callback)
         assert(handle, pid) -- fails here when executable is not found (ENOENT), for example
         return handle, pid
@@ -160,10 +209,7 @@ M.setup = async(function(repos)
         if stat == nil then
             print(string.format("cloning %s ", repo))
 
-            local _, _, code = await(spawn("git", { args = { "clone", "https://github.com/" .. repo, clonePath } }))
-            if code ~= 0 then
-                error(string.format("git exited with code %d", code))
-            end
+            await(spawn("git", { args = { "clone", "https://github.com/" .. repo, clonePath } }))
 
             print(string.format("cloning %s done", repo))
         end
