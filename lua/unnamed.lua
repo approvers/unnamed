@@ -94,9 +94,9 @@ local function async(fn)
     end
 end
 
--- resume_ctx: dict {
+-- resume_ctx: table {
 --     ret: array,
---     deferred: Option<fn>
+--     deferred: Option<function>
 -- }
 
 local function asyncify(fn)
@@ -166,9 +166,7 @@ local function list_files_recursively(path)
         if name == nil then
             break
         end
-        if not name then
-            err(name)
-        end
+        assert(name, type)
 
         if not array_contains(name, compile_blacklist) then
             if type == "file" then
@@ -196,26 +194,54 @@ local function compile(repos)
         end
     end
 
+    await(spawn("rm", { args = { "-rf", compilePath } }))
+
     for compiledFilePath, srcPath in pairs(symlink_table) do
-        local compiledFullPath = join_path({ compilePath, compiledFilePath }, { trailing_slash = false })
+        local compiledFileFullPath = join_path({ compilePath, compiledFilePath }, { trailing_slash = false })
 
-        local iserr, err = await(
-            spawn("sh", { args = { "-c", string.format("mkdir -p $(dirname '%s')", compiledFullPath) } })
-        )
-        assert(iserr, err)
+        await(spawn("sh", { args = { "-c", string.format("mkdir -p $(dirname '%s')", compiledFileFullPath) } }))
 
-        local iserr, err = uv.fs_symlink(compiledFullPath, srcPath)
+        local iserr, err = uv.fs_symlink(srcPath, compiledFileFullPath)
         assert(iserr, err)
     end
 end
 
+local function repo_entry_to_repo_name(repos)
+    local ret = {}
+
+    for _, entry in ipairs(repos) do
+        local repo = ""
+        local ty = type(entry)
+
+        if ty == "table" then
+            repo = entry.repo
+        elseif ty == "string" then
+            repo = entry
+        else
+            error(string.format("repos must be array contains table or string, found '%s'", ty))
+        end
+
+        table.insert(ret, repo)
+    end
+
+    return ret
+end
+
+-- repos: string or table: {
+--      repo: string,
+--      setup: Option<function>
+-- }
 M.setup = async(function(repos)
-    for i, repo in ipairs(repos) do
+    local needs_compile = false
+    local repoNames = repo_entry_to_repo_name(repos)
+
+    for _, repo in ipairs(repoNames) do
         local clonePath = join_path({ repoPath, repo })
-        local stat = uv.fs_stat(clonePath) -- TODO: proper detectation (check whether if `git status` successes?)
+        local stat = uv.fs_stat(clonePath) -- TODO: proper detection (check whether if `git status` successes?)
 
         if stat == nil then
-            print(string.format("cloning %s ", repo))
+            needs_compile = true -- TODO: proper detection too (save `repoNames` in compiled/ and validate?)
+            print(string.format("cloning %s", repo))
 
             await(spawn("git", { args = { "clone", "https://github.com/" .. repo, clonePath } }))
 
@@ -223,7 +249,17 @@ M.setup = async(function(repos)
         end
     end
 
-    compile(repos)
+    if needs_compile then
+        compile(repoNames)
+    end
+
+    vim.o.runtimepath = vim.o.runtimepath .. "," .. compilePath
+
+    for i, entry in ipairs(repos) do
+        if type(entry) == "table" and entry.setup then
+            entry.setup()
+        end
+    end
 end)
 
 return M

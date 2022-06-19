@@ -10,4 +10,13 @@ run echo -e 'root ALL=(ALL) NOPASSWD: ALL\n%wheel ALL=(ALL) NOPASSWD: ALL' > /et
 
 user john
 workdir /home/john/.config/nvim
-run echo 'require("unnamed").setup({ "ishan9299/nvim-solarized-lua" })' > init.lua
+run echo -e 'require("unnamed").setup({ \n\
+    { \n\
+        repo = "ishan9299/nvim-solarized-lua", \n\
+        setup = function() vim.cmd("colorscheme solarized-flat") end \n\
+    }, \n\
+    { \n\
+        repo = "kdheepak/tabline.nvim", \n\
+        setup = function() require("tabline").setup({ enable = true }) end \n\
+    } \n\
+})' > init.lua
