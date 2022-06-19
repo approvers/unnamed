@@ -12,8 +12,8 @@ user john
 workdir /home/john/.config/nvim
 run echo -e 'require("unnamed").setup({ \n\
     { \n\
-        repo = "ishan9299/nvim-solarized-lua", \n\
-        setup = function() vim.cmd("colorscheme solarized-flat") end \n\
+        repo = "nvim-lualine/lualine.nvim", \n\
+        setup = function() lua require("lualine").setup({ theme = "solarized_dark" }) end \n\
     }, \n\
     { \n\
         repo = "kdheepak/tabline.nvim", \n\

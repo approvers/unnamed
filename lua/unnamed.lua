@@ -253,13 +253,19 @@ M.setup = async(function(repos)
         compile(repoNames)
     end
 
-    vim.o.runtimepath = vim.o.runtimepath .. "," .. compilePath
+    -- to avoid vim.loop callback restrictions
+    -- e.g.: we cannot call vim.cmd or modify vim.o in vim.loop callback
+    --
+    -- maybe better to automatically do this in async system (likely in `asyncify` function)?
+    vim.schedule(function()
+        vim.o.runtimepath = vim.o.runtimepath .. "," .. compilePath
 
-    for i, entry in ipairs(repos) do
-        if type(entry) == "table" and entry.setup then
-            entry.setup()
+        for i, entry in ipairs(repos) do
+            if type(entry) == "table" and entry.setup then
+                entry.setup()
+            end
         end
-    end
+    end)
 end)
 
 return M
