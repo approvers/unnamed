@@ -3,10 +3,6 @@ local M = {}
 -- https://github.com/luvit/luv/blob/master/docs.md
 local uv = vim.loop
 
-local rootPath = "/home/john/.config/nvim/unnamed/" -- TODO: make this configurable
-local repoPath = rootPath .. "repo/"
-local compilePath = rootPath .. "compiled/"
-
 local compile_blacklist = { ".git" }
 
 local function pack(...)
@@ -182,7 +178,7 @@ local function list_files_recursively(path)
     return ret
 end
 
-local function compile(repos)
+local function compile(repoPath, compilePath, repos)
     local symlink_table = {}
     for _, repo in ipairs(repos) do
         local fullpath = join_path({ repoPath, repo })
@@ -227,45 +223,56 @@ local function repo_entry_to_repo_name(repos)
     return ret
 end
 
--- repos: string or table: {
---      repo: string,
---      setup: Option<function>
+-- table: {
+--     workdir: string, used to store cache or maintain compiled things
+--     repos: string or table: {
+--          repo: string,
+--          setup: Option<function>
+--     }
 -- }
-M.setup = async(function(repos)
-    local needs_compile = false
-    local repoNames = repo_entry_to_repo_name(repos)
+M.setup = function(config)
+    assert(config.workdir)
+    assert(config.repos)
 
-    for _, repo in ipairs(repoNames) do
-        local clonePath = join_path({ repoPath, repo })
-        local stat = uv.fs_stat(clonePath) -- TODO: proper detection (check whether if `git status` successes?)
+    local rootPath = vim.fn.resolve(config.workdir)
+    local repoPath = join_path({ rootPath, "repo" })
+    local compilePath = join_path({ rootPath, "compiled" })
 
-        if stat == nil then
-            needs_compile = true -- TODO: proper detection too (save `repoNames` in compiled/ and validate?)
-            print(string.format("cloning %s", repo))
+    vim.o.runtimepath = vim.o.runtimepath .. "," .. compilePath
 
-            await(spawn("git", { args = { "clone", "https://github.com/" .. repo, clonePath } }))
+    async(function()
+        local repos = config.repos
 
-            print(string.format("cloning %s done", repo))
-        end
-    end
+        local needs_compile = false
+        local repoNames = repo_entry_to_repo_name(repos)
 
-    if needs_compile then
-        compile(repoNames)
-    end
+        for _, repo in ipairs(repoNames) do
+            local clonePath = join_path({ repoPath, repo })
+            local stat = uv.fs_stat(clonePath) -- TODO: proper detection (check whether if `git status` successes?)
 
-    -- to avoid vim.loop callback restrictions
-    -- e.g.: we cannot call vim.cmd or modify vim.o in vim.loop callback
-    --
-    -- maybe better to automatically do this in async system (likely in `asyncify` function)?
-    vim.schedule(function()
-        vim.o.runtimepath = vim.o.runtimepath .. "," .. compilePath
+            if stat == nil then
+                needs_compile = true -- TODO: proper detection too (save `repoNames` in compiled/ and validate?)
+                print(string.format("cloning %s", repo))
 
-        for i, entry in ipairs(repos) do
-            if type(entry) == "table" and entry.setup then
-                entry.setup()
+                await(spawn("git", { args = { "clone", "https://github.com/" .. repo, clonePath } }))
+
+                print(string.format("cloning %s done", repo))
             end
         end
-    end)
-end)
+
+        if needs_compile then
+            compile(repoPath, compilePath, repoNames)
+            return
+        end
+
+        vim.schedule(function()
+            for i, entry in ipairs(repos) do
+                if type(entry) == "table" and entry.setup then
+                    entry.setup()
+                end
+            end
+        end)
+    end)()
+end
 
 return M
