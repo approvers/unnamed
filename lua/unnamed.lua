@@ -179,6 +179,8 @@ local function list_files_recursively(path)
 end
 
 local function compile(repoPath, compilePath, repos)
+    print("compiling")
+
     local symlink_table = {}
     for _, repo in ipairs(repos) do
         local fullpath = join_path({ repoPath, repo })
@@ -200,6 +202,8 @@ local function compile(repoPath, compilePath, repos)
         local iserr, err = uv.fs_symlink(srcPath, compiledFileFullPath)
         assert(iserr, err)
     end
+
+    print("compiling done. restart neovim to take effect.")
 end
 
 local function repo_entry_to_repo_name(repos)
