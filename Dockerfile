@@ -10,13 +10,4 @@ run echo -e 'root ALL=(ALL) NOPASSWD: ALL\n%wheel ALL=(ALL) NOPASSWD: ALL' > /et
 
 user john
 workdir /home/john/.config/nvim
-run echo -e 'require("unnamed").setup({ \n\
-    { \n\
-        repo = "nvim-lualine/lualine.nvim", \n\
-        setup = function() lua require("lualine").setup({ theme = "solarized_dark" }) end \n\
-    }, \n\
-    { \n\
-        repo = "kdheepak/tabline.nvim", \n\
-        setup = function() require("tabline").setup({ enable = true }) end \n\
-    } \n\
-})' > init.lua
+copy misc/example.lua init.lua
