@@ -74,6 +74,24 @@ local function join_path(elements, opts)
     return ret
 end
 
+local function dirname(str)
+    return str:match("(.*/)")
+end
+
+local function dedup_array(array)
+    local map = {}
+    for i, v in ipairs(array) do
+        map[v] = 1
+    end
+
+    local ret = {}
+    for k, _ in pairs(map) do
+        table.insert(ret, k)
+    end
+
+    return ret
+end
+
 local function coroutine_fail_fmt(ret, thread)
     return string.format(
         "\n\n### coroutine stacktrace ###\n%s\n%s\n### coroutine stacktrace until here ###\n",
@@ -181,25 +199,31 @@ end
 local function compile(repoPath, compilePath, repos)
     print("compiling")
 
+    await(spawn("rm", { args = { "-rf", compilePath } }))
+
     local symlink_table = {}
+    local dirs = {} -- directories need to create
+
     for _, repo in ipairs(repos) do
         local fullpath = join_path({ repoPath, repo })
         local repo_files = list_files_recursively(fullpath)
 
         for _, file in ipairs(repo_files) do
             local relative_path = str_trim_prefix(file, fullpath)
-            symlink_table[relative_path] = file
+
+            symlink_table[relative_path] = file -- deduplicating by using relative path as key
+
+            local file_fullpath = join_path({ compilePath, relative_path }, { trailing_slash = false })
+            dirs[dirname(file_fullpath)] = true -- deduplicate
         end
     end
 
-    await(spawn("rm", { args = { "-rf", compilePath } }))
+    await(spawn("mkdir", { args = join_array({ { "-p" }, vim.tbl_keys(dirs) }) }))
 
     for compiledFilePath, srcPath in pairs(symlink_table) do
-        local compiledFileFullPath = join_path({ compilePath, compiledFilePath }, { trailing_slash = false })
+        local file_fullpath = join_path({ compilePath, compiledFilePath }, { trailing_slash = false })
 
-        await(spawn("sh", { args = { "-c", string.format("mkdir -p $(dirname '%s')", compiledFileFullPath) } }))
-
-        local iserr, err = uv.fs_symlink(srcPath, compiledFileFullPath)
+        local iserr, err = uv.fs_symlink(srcPath, file_fullpath)
         assert(iserr, err)
     end
 
