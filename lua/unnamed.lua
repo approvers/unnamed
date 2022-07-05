@@ -241,8 +241,9 @@ M.setup = function(config)
     local rootPath = vim.fn.resolve(config.workdir)
     local repoPath = join_path({ rootPath, "repo" })
     local compilePath = join_path({ rootPath, "compiled" })
+    local compileAfterPath = join_path({ compilePath, "after" })
 
-    vim.o.runtimepath = vim.o.runtimepath .. "," .. compilePath
+    vim.o.runtimepath = vim.o.runtimepath .. "," .. compilePath .. "," .. compileAfterPath
 
     async(function()
         local repos = config.repos
