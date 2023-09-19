@@ -67,7 +67,7 @@ local function join_path(elements, opts)
         end
     end
 
-    if ((not opts) or (opts and not opts.trailing_slash)) and str_ends_with(ret, "/") then
+    if (not opts or (opts and not opts.trailing_slash)) and str_ends_with(ret, "/") then
         ret = ret:sub(0, -2)
     end
 
@@ -272,38 +272,73 @@ M.setup = function(config)
 
     vim.o.runtimepath = vim.o.runtimepath .. "," .. compile_path .. "," .. compile_after_path
 
-    async(function()
-        local repos = config.repos
+    local repos = config.repos
 
-        local needs_compile = false
-        local repo_names = repo_entry_to_repo_name(repos)
+    local repo_names = repo_entry_to_repo_name(repos)
+    local needs_fetch = {}
 
-        for _, repo in ipairs(repo_names) do
-            local clonePath = join_path_dir({ repo_path, repo })
-            local stat = uv.fs_stat(clonePath) -- TODO: proper detection (check whether if `git status` successes?)
+    for _, repo in ipairs(repo_names) do
+        local clone_path = join_path_dir({ repo_path, repo })
+        local stat = uv.fs_stat(clone_path)
 
-            if stat == nil then
-                needs_compile = true -- TODO: proper detection too (save `repo_names` in compiled/ and validate?)
-                print(string.format("cloning %s", repo))
+        if stat == nil then
+            table.insert(needs_fetch, { repo = repo, clone_path = clone_path })
+        end
+    end
 
-                await(spawn("git", { args = { "clone", "https://github.com/" .. repo, clonePath } }))
-
-                print(string.format("cloning %s done", repo))
+    if #needs_fetch == 0 then
+        for _, entry in ipairs(repos) do
+            if type(entry) == "table" and entry.imm_setup then
+                entry.imm_setup()
             end
         end
 
-        if needs_compile then
-            compile(repo_path, compile_path, repo_names)
-            return
-        end
+        local listen = vim.api.nvim_create_autocmd
+        local fire = vim.api.nvim_exec_autocmds
 
-        vim.schedule(function()
-            for i, entry in ipairs(repos) do
-                if type(entry) == "table" and entry.setup then
-                    entry.setup()
+        local function _load()
+            vim.schedule(function()
+                if vim.v.exiting ~= vim.NIL then
+                    return
                 end
-            end
-        end)
+                for _, entry in ipairs(repos) do
+                    if type(entry) == "table" and entry.setup then
+                        entry.setup()
+                    end
+                end
+            end)
+        end
+
+        listen("User", {
+            pattern = "un_lazyload",
+            once = true,
+            callback = function()
+                if vim.v.vim_did_enter == 1 then
+                    _load()
+                    return
+                end
+
+                listen("UIEnter", {
+                    once = true,
+                    callback = function()
+                        _load()
+                    end,
+                })
+            end,
+        })
+
+        fire("User", { pattern = "un_lazyload", modeline = false })
+
+        return
+    end
+
+    async(function()
+        for _, entry in ipairs(needs_fetch) do
+            print(string.format("cloning %s", entry.repo))
+            await(spawn("git", { args = { "clone", "https://github.com/" .. entry.repo, entry.clone_path } }))
+        end
+
+        compile(repo_path, compile_path, repo_names)
     end)()
 end
 
