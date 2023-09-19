@@ -42,7 +42,7 @@ local function join_str(strarray, delimiter)
     for i, s in ipairs(strarray) do
         ret = ret .. s
         if i ~= #strarray then
-            ret = ret .. (delimiter or " ")
+            ret = ret .. delimiter
         end
     end
     return ret
@@ -56,7 +56,7 @@ local function str_trim_prefix(str, prefix)
     end
 end
 
--- { trailing_slash: bool (default = true) }
+-- { trailing_slash: bool (default = false) }
 local function join_path(elements, opts)
     local ret = ""
 
@@ -67,11 +67,15 @@ local function join_path(elements, opts)
         end
     end
 
-    if opts and not opts.trailing_slash and str_ends_with(ret, "/") then
+    if ((not opts) or (opts and not opts.trailing_slash)) and str_ends_with(ret, "/") then
         ret = ret:sub(0, -2)
     end
 
     return ret
+end
+
+local function join_path_dir(elements)
+    return join_path(elements, { trailing_slash = true })
 end
 
 local function dirname(str)
@@ -146,7 +150,7 @@ local function spawn(name, opts)
 
                 local msg = string.format(
                     "command '%s' failed with status %d",
-                    join_str(join_array({ { name }, opts.args or {} })),
+                    join_str(join_array({ { name }, opts.args or {} }), " "),
                     code
                 )
 
@@ -180,13 +184,12 @@ local function list_files_recursively(path)
         if name == nil then
             break
         end
-        assert(name, type)
 
         if not array_contains(name, compile_blacklist) then
             if type == "file" then
-                table.insert(ret, join_path({ path, name }, { trailing_slash = false }))
+                table.insert(ret, join_path({ path, name }))
             elseif type == "directory" then
-                for _, file in ipairs(list_files_recursively(join_path({ path, name }))) do
+                for _, file in ipairs(list_files_recursively(join_path_dir({ path, name }))) do
                     table.insert(ret, file)
                 end
             end
@@ -196,16 +199,16 @@ local function list_files_recursively(path)
     return ret
 end
 
-local function compile(repoPath, compilePath, repos)
+local function compile(repo_path, compile_path, repos)
     print("compiling")
 
-    await(spawn("rm", { args = { "-rf", compilePath } }))
+    await(spawn("rm", { args = { "-rf", compile_path } }))
 
     local symlink_table = {}
     local dirs = {} -- directories need to create
 
     for _, repo in ipairs(repos) do
-        local fullpath = join_path({ repoPath, repo })
+        local fullpath = join_path_dir({ repo_path, repo })
         local repo_files = list_files_recursively(fullpath)
 
         for _, file in ipairs(repo_files) do
@@ -213,15 +216,15 @@ local function compile(repoPath, compilePath, repos)
 
             symlink_table[relative_path] = file -- deduplicating by using relative path as key
 
-            local file_fullpath = join_path({ compilePath, relative_path }, { trailing_slash = false })
+            local file_fullpath = join_path({ compile_path, relative_path })
             dirs[dirname(file_fullpath)] = true -- deduplicate
         end
     end
 
     await(spawn("mkdir", { args = join_array({ { "-p" }, vim.tbl_keys(dirs) }) }))
 
-    for compiledFilePath, srcPath in pairs(symlink_table) do
-        local file_fullpath = join_path({ compilePath, compiledFilePath }, { trailing_slash = false })
+    for compiled_file_path, srcPath in pairs(symlink_table) do
+        local file_fullpath = join_path({ compile_path, compiled_file_path })
 
         local iserr, err = uv.fs_symlink(srcPath, file_fullpath)
         assert(iserr, err)
@@ -252,7 +255,7 @@ local function repo_entry_to_repo_name(repos)
 end
 
 -- table: {
---     workdir: string, used to store cache or maintain compiled things
+--     workdir: string, used to store cache or maintain compiled artifacts
 --     repos: string or table: {
 --          repo: string,
 --          setup: Option<function>
@@ -262,25 +265,25 @@ M.setup = function(config)
     assert(config.workdir)
     assert(config.repos)
 
-    local rootPath = vim.fn.resolve(config.workdir)
-    local repoPath = join_path({ rootPath, "repo" })
-    local compilePath = join_path({ rootPath, "compiled" })
-    local compileAfterPath = join_path({ compilePath, "after" })
+    local root_path = vim.fn.resolve(config.workdir)
+    local repo_path = join_path_dir({ root_path, "repo" })
+    local compile_path = join_path_dir({ root_path, "compiled" })
+    local compile_after_path = join_path_dir({ compile_path, "after" })
 
-    vim.o.runtimepath = vim.o.runtimepath .. "," .. compilePath .. "," .. compileAfterPath
+    vim.o.runtimepath = vim.o.runtimepath .. "," .. compile_path .. "," .. compile_after_path
 
     async(function()
         local repos = config.repos
 
         local needs_compile = false
-        local repoNames = repo_entry_to_repo_name(repos)
+        local repo_names = repo_entry_to_repo_name(repos)
 
-        for _, repo in ipairs(repoNames) do
-            local clonePath = join_path({ repoPath, repo })
+        for _, repo in ipairs(repo_names) do
+            local clonePath = join_path_dir({ repo_path, repo })
             local stat = uv.fs_stat(clonePath) -- TODO: proper detection (check whether if `git status` successes?)
 
             if stat == nil then
-                needs_compile = true -- TODO: proper detection too (save `repoNames` in compiled/ and validate?)
+                needs_compile = true -- TODO: proper detection too (save `repo_names` in compiled/ and validate?)
                 print(string.format("cloning %s", repo))
 
                 await(spawn("git", { args = { "clone", "https://github.com/" .. repo, clonePath } }))
@@ -290,7 +293,7 @@ M.setup = function(config)
         end
 
         if needs_compile then
-            compile(repoPath, compilePath, repoNames)
+            compile(repo_path, compile_path, repo_names)
             return
         end
 
