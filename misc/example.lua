@@ -5,13 +5,13 @@ local config = {
     repos = {
         {
             repo = "nvim-lualine/lualine.nvim",
-            setup = function()
+            fast_setup = function()
                 require("lualine").setup({ theme = "solarized_dark" })
             end,
         },
         {
             repo = "kdheepak/tabline.nvim",
-            setup = function()
+            fast_setup = function()
                 require("tabline").setup({ enable = true })
             end,
         },
