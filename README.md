@@ -23,7 +23,7 @@ end
 vim.opt.runtimepath:prepend(unnamed_path)
 
 local plugins = {
-    -- if not setup required, you can directly write repo name
+    -- if no setup required, you can directly write repo name
     "windwp/nvim-ts-autotag",
     -- use `fast_setup` to run setup function before first screen update
     {
@@ -40,6 +40,17 @@ local plugins = {
         end,
     },
 }
+
+require("unnamed").setup({
+    workdir = unnamed_path,
+    repos = plugins,
+})
+```
+
+To update your plugins, use this command:
+
+```lua
+:lua require("unnamed").update()
 ```
 
 #### development prerequirements
