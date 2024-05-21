@@ -14,7 +14,7 @@ local function str_starts_with(str, starting)
 end
 
 local function str_ends_with(str, ending)
-    return ending == "" or str:sub(- #ending) == ending
+    return ending == "" or str:sub(-#ending) == ending
 end
 
 local function array_contains(value, array)
