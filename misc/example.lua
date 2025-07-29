@@ -18,14 +18,11 @@ local config = {
 
         -- ### tree-sitter ###
         "windwp/nvim-ts-autotag",
-        "nvim-treesitter/playground",
         {
             repo = "nvim-treesitter/nvim-treesitter",
+            branch = "main",
             setup = function()
-                require("nvim-treesitter.configs").setup({
-                    autotag = { enable = true },
-                    playground = { enable = true },
-                })
+                require("nvim-treesitter").setup({})
             end,
         },
     },

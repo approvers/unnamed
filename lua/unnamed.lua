@@ -26,6 +26,9 @@ local function array_contains(value, array)
 
     return false
 end
+local function array_push(array, value)
+    array[#array+1] = value
+end
 
 local function join_array(arrays)
     local ret = {}
@@ -205,7 +208,8 @@ local function compile(repo_path, compile_path, repos)
     local symlink_table = {}
     local dirs = {} -- directories need to create
 
-    for _, repo in ipairs(repos) do
+    for _, repo_entry in ipairs(repos) do
+        local repo = repo_entry.repo
         local fullpath = join_path_dir({ repo_path, repo })
         local repo_files = list_files_recursively(fullpath)
 
@@ -273,27 +277,6 @@ local function load(repos)
     fire("User", { pattern = lazyload_pattern, modeline = false })
 end
 
-local function repo_entry_to_repo_name(repos)
-    local ret = {}
-
-    for _, entry in ipairs(repos) do
-        local repo = ""
-        local ty = type(entry)
-
-        if ty == "table" then
-            repo = entry.repo
-        elseif ty == "string" then
-            repo = entry
-        else
-            error(string.format("repos must be array contains table or string, found '%s'", ty))
-        end
-
-        table.insert(ret, repo)
-    end
-
-    return ret
-end
-
 -- table: {
 --     workdir: string, used to store cache or maintain compiled artifacts
 --     repos: string or table: {
@@ -313,13 +296,26 @@ M.setup = function(config)
     vim.o.runtimepath = vim.o.runtimepath .. "," .. compile_path .. "," .. compile_after_path
 
     local repos = config.repos
-
-    local repo_names = repo_entry_to_repo_name(repos)
-
     local repo_entries = {}
-    for _, repo in ipairs(repo_names) do
-        local clone_path = join_path_dir({ repo_path, repo })
-        table.insert(repo_entries, { repo = repo, path = clone_path })
+
+    for _, raw in ipairs(repos) do
+        local entry = {}
+        local ty = type(raw)
+
+        if ty == "table" then
+            entry.repo = raw.repo
+            if raw.branch then
+                entry.branch = raw.branch
+            end
+        elseif ty == "string" then
+            entry.repo = raw
+        else
+            error(string.format("repos must be array contains table or string, found '%s'", ty))
+        end
+
+        entry.path = join_path_dir({ repo_path, entry.repo })
+
+        table.insert(repo_entries, entry)
     end
 
     M.config = config
@@ -341,18 +337,22 @@ M.setup = function(config)
         async(function()
             for _, entry in ipairs(needs_fetch) do
                 print(string.format("cloning %s", entry.repo))
-                await(spawn("git", {
-                    args = {
-                        "clone",
-                        "--filter=blob:none",
-                        "https://github.com/" .. entry.repo,
-                        entry.path,
-                    },
-                }))
+
+                local args = {
+                    "clone",
+                    "--filter=blob:none",
+                    "https://github.com/" .. entry.repo,
+                    entry.path,
+                }
+                if entry.branch then
+                    array_push(args, "--branch=" .. entry.branch)
+                end
+
+                await(spawn("git", { args = args }))
             end
 
             print("compiling")
-            compile(repo_path, compile_path, repo_names)
+            compile(repo_path, compile_path, repo_entries)
             print("compiling done. restart neovim to take effect.")
         end)()
         return
